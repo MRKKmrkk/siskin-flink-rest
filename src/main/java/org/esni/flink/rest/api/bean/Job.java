@@ -4,12 +4,12 @@ public class Job {
 
     private String jid;
     private String name;
-    private boolean isStoppable;
+    private Boolean isStoppable;
     private State state;
-    private long startTime;
-    private long endTime;
-    private long duration;
-    private long now;
+    private Long startTime;
+    private Long endTime;
+    private Long duration;
+    private Long now;
 
     private String timestamps;
     private String vertices;
@@ -20,7 +20,7 @@ public class Job {
 
     }
 
-    public Job(String jid, String name, boolean isStoppable, State state, long startTime, long endTime, long duration, long now, String timestamps, String vertices, String statusCounts, String plan) {
+    public Job(String jid, String name, Boolean isStoppable, State state, Long startTime, Long endTime, Long duration, Long now, String timestamps, String vertices, String statusCounts, String plan) {
         this.jid = jid;
         this.name = name;
         this.isStoppable = isStoppable;
@@ -51,11 +51,11 @@ public class Job {
         this.name = name;
     }
 
-    public boolean isStoppable() {
+    public Boolean isStoppable() {
         return isStoppable;
     }
 
-    public void setStoppable(boolean stoppable) {
+    public void setStoppable(Boolean stoppable) {
         isStoppable = stoppable;
     }
 
@@ -67,35 +67,35 @@ public class Job {
         this.state = state;
     }
 
-    public long getStartTime() {
+    public Long getStartTime() {
         return startTime;
     }
 
-    public void setStartTime(long startTime) {
+    public void setStartTime(Long startTime) {
         this.startTime = startTime;
     }
 
-    public long getEndTime() {
+    public Long getEndTime() {
         return endTime;
     }
 
-    public void setEndTime(long endTime) {
+    public void setEndTime(Long endTime) {
         this.endTime = endTime;
     }
 
-    public long getDuration() {
+    public Long getDuration() {
         return duration;
     }
 
-    public void setDuration(long duration) {
+    public void setDuration(Long duration) {
         this.duration = duration;
     }
 
-    public long getNow() {
+    public Long getNow() {
         return now;
     }
 
-    public void setNow(long now) {
+    public void setNow(Long now) {
         this.now = now;
     }
 

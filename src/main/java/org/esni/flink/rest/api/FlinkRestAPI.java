@@ -14,7 +14,6 @@ import org.esni.flink.rest.api.bean.Job;
 import org.esni.flink.rest.api.bean.State;
 
 import java.io.*;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,16 +26,34 @@ public class FlinkRestAPI implements Closeable {
 
     private FlinkRestAPI(String flinkRestUrl) {
 
-        if (flinkRestUrl.endsWith("/")) flinkRestUrl = flinkRestUrl.substring(0, flinkRestUrl.length());
+        if (flinkRestUrl.endsWith("/")) flinkRestUrl = flinkRestUrl.substring(0, flinkRestUrl.length() - 1);
 
         this.flinkRestUrl = flinkRestUrl;
         this.client = HttpClients.createDefault();
 
     }
 
+    private boolean checkStatusCode(CloseableHttpResponse res, int code) {
+
+        return res.getStatusLine().getStatusCode() == code;
+
+    }
+
     public void close() throws IOException {
 
         client.close();
+
+    }
+
+    private void closeRes(CloseableHttpResponse res) {
+
+        if (res != null) {
+            try {
+                res.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 
     }
 
@@ -50,17 +67,21 @@ public class FlinkRestAPI implements Closeable {
     public List<Jar> getJars() {
 
         ArrayList<Jar> jars = new ArrayList<>();
+        CloseableHttpResponse res = null;
 
         JSONObject json = null;
         try {
-            CloseableHttpResponse res = client.execute(new HttpGet(flinkRestUrl + "/jars"));
+             res = client.execute(new HttpGet(flinkRestUrl + "/jars"));
 
-            if (res.getStatusLine().getStatusCode() != 200) return jars;
+            if (!checkStatusCode(res, 200)) return jars;
 
             json = JSON.parseObject(EntityUtils.toString(res.getEntity()));
         } catch (IOException e) {
             e.printStackTrace();
             return jars;
+        }
+        finally {
+            closeRes(res);
         }
 
         for (Object file : json.getJSONArray("files")) {
@@ -90,8 +111,11 @@ public class FlinkRestAPI implements Closeable {
             e.printStackTrace();
             return false;
         }
+        finally {
+           closeRes(res);
+        }
 
-        return res.getStatusLine().getStatusCode() == 200;
+        return checkStatusCode(res, 200);
 
     }
 
@@ -113,7 +137,7 @@ public class FlinkRestAPI implements Closeable {
      * return null when run jar fail
      */
 
-    public String runJar(String jarId, String entryClass, int parallelism, String programArgs, boolean allowNonRestoredState, String savepointPath) {
+    public Job runJar(String jarId, String entryClass, int parallelism, String programArgs, boolean allowNonRestoredState, String savepointPath) {
 
 
         CloseableHttpResponse res = null;
@@ -133,42 +157,46 @@ public class FlinkRestAPI implements Closeable {
 
             res = client.execute(post);
 
-
         } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
 
-        if (res.getStatusLine().getStatusCode() != 200) {
+        if (!checkStatusCode(res, 200)) {
 
             // todo: need match error in here
             return null;
 
         }
 
-        String jobId = null;
+        Job job = new Job();
         try {
-            jobId = JSONObject.parseObject(EntityUtils.toString(res.getEntity())).getString("jobid");
+            String jobId = JSONObject.parseObject(EntityUtils.toString(res.getEntity())).getString("jobid");
+            job.setJid(jobId);
         } catch (IOException e) {
             e.printStackTrace();
+            return null;
         }
-        return jobId;
+        finally {
+            closeRes(res);
+        }
+        return job;
 
     }
 
-    public String runJar(String jarId, String entryClass, int parallelism, String programArgs, boolean allowNonRestoredState) {
+    public Job runJar(String jarId, String entryClass, int parallelism, String programArgs, boolean allowNonRestoredState) {
 
         return runJar(jarId, entryClass, parallelism, programArgs, allowNonRestoredState, null);
 
     }
 
-    public String runJar(String jarId, String entryClass, int parallelism, String programArgs) {
+    public Job runJar(String jarId, String entryClass, int parallelism, String programArgs) {
 
         return runJar(jarId, entryClass, parallelism, programArgs, false, null);
 
     }
 
-    public String runJar(String jarId, String entryClass, int parallelism) {
+    public Job runJar(String jarId, String entryClass, int parallelism) {
 
         return runJar(jarId, entryClass, parallelism, null, false, null);
 
@@ -180,20 +208,23 @@ public class FlinkRestAPI implements Closeable {
      * Returns an overview over all jobs and their current state.
      */
 
-    // todo: do not impl
         public List<Job> getJobs()  {
 
         ArrayList<Job> jobs = new ArrayList<>();
 
             JSONObject json = null;
+            CloseableHttpResponse res = null;
             try {
-                CloseableHttpResponse res = client.execute(new HttpGet(flinkRestUrl + "/jobs"));
+                res = client.execute(new HttpGet(flinkRestUrl + "/jobs"));
 
                 if (res.getStatusLine().getStatusCode() != 200) return jobs;
                 json = JSON.parseObject(EntityUtils.toString(res.getEntity()));
             } catch (IOException e) {
                 e.printStackTrace();
                 return jobs;
+            }
+            finally {
+                closeRes(res);
             }
 
             for (Object o : json.getJSONArray("jobs")) {
@@ -219,14 +250,19 @@ public class FlinkRestAPI implements Closeable {
     public Job getJob(String jobId) {
 
         JSONObject json = null;
+        CloseableHttpResponse res = null;
+
         try {
-            CloseableHttpResponse res = client.execute(new HttpGet(flinkRestUrl + "/jobs/" + jobId));
+            res = client.execute(new HttpGet(flinkRestUrl + "/jobs/" + jobId));
             json = JSON.parseObject(EntityUtils.toString(res.getEntity()));
 
-            if (res.getStatusLine().getStatusCode() != 200) return null;
+            if (!checkStatusCode(res, 200)) return null;
         } catch (IOException e) {
             e.printStackTrace();
             return null;
+        }
+        finally {
+            closeRes(res);
         }
 
         return new Job(
@@ -255,12 +291,22 @@ public class FlinkRestAPI implements Closeable {
      * Query parameters
      * mode (optional): String value that specifies the termination mode. The only supported value is: "cancel".
      */
-    public boolean terminateJob(String jobId) throws IOException {
+    public boolean terminateJob(String jobId) {
 
         HttpPatch httpPatch = new HttpPatch(flinkRestUrl + "/jobs/" + jobId);
-        CloseableHttpResponse res = client.execute(httpPatch);
+        CloseableHttpResponse res = null;
+        try {
+            res = client.execute(httpPatch);
 
-        return res.getStatusLine().getStatusCode() == 202;
+            if (!checkStatusCode(res, 202)) return false;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        finally {
+            closeRes(res);
+        }
+
+        return true;
 
     }
 
@@ -280,21 +326,27 @@ public class FlinkRestAPI implements Closeable {
         File file = new File(path);
 
         JSONObject json = null;
+        CloseableHttpResponse res = null;
+
         try {
             MultipartEntityBuilder entityBuilder = MultipartEntityBuilder.create();
             entityBuilder.addBinaryBody(file.getName(), new FileInputStream(file), ContentType.create("application/x-java-archive", StandardCharsets.UTF_8), file.getName());
 
             HttpPost post = new HttpPost(flinkRestUrl + "/jars/upload");
             post.setEntity(entityBuilder.build());
-            CloseableHttpResponse res = client.execute(post);
+            res = client.execute(post);
 
-            if (res.getStatusLine().getStatusCode() != 200) return null;
+            if (!checkStatusCode(res, 200)) return null;
 
             json = JSON.parseObject(EntityUtils.toString(res.getEntity()));
         } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
+        finally {
+            closeRes(res);
+        }
+
         if (!"success".equals(json.getString("status"))) {
            return null;
         }
@@ -314,12 +366,16 @@ public class FlinkRestAPI implements Closeable {
 
     public static void main(String[] args) throws IOException {
 
-        Properties properties = new Properties();
-        InputStream resourceAsStream = Thread.currentThread().getContextClassLoader().getResourceAsStream("flink.properties");
-        properties.load(resourceAsStream);
+//        Properties properties = new Properties();
+//        InputStream resourceAsStream = Thread.currentThread().getContextClassLoader().getResourceAsStream("flink.properties");
+//        properties.load(resourceAsStream);
+//
+//        FlinkRestAPI api = create(properties.getProperty("url"));
 
-        FlinkRestAPI api = create(properties.getProperty("url"));
-        System.out.println(api.uploadJar("E:\\Projects\\siskin\\siskin-core\\target\\siskin-core-1.0-SNAPSHOT.jar"));
+        FlinkRestAPI api = FlinkRestAPI.create("http://1.15.135.178:8181");
+        List<Jar> jars = api.getJars();
+
+        System.out.println(api.runJar(jars.get(1).getId(), "org.esni.siskin_core.app.ETLApplication", 1));
 
     }
 

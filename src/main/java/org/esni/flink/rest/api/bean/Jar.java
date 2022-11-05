@@ -4,9 +4,9 @@ public class Jar {
 
     private String id;
     private String name;
-    private long uploaded;
+    private Long uploaded;
 
-    public Jar(String id, String name, long uploaded) {
+    public Jar(String id, String name, Long uploaded) {
         this.id = id;
         this.name = name;
         this.uploaded = uploaded;
@@ -33,11 +33,11 @@ public class Jar {
         this.name = name;
     }
 
-    public long getUploaded() {
+    public Long getUploaded() {
         return uploaded;
     }
 
-    public void setUploaded(long uploaded) {
+    public void setUploaded(Long uploaded) {
         this.uploaded = uploaded;
     }
 
